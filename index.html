@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>live class poll</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 20px 48px;
+    background: #0a0a0a;
+    color: #e5e5e5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  .qr { display: flex; justify-content: center; margin-bottom: 20px; }
+  .qr img { background: #fff; padding: 8px; border-radius: 8px; display: block; }
+  @media (max-width: 699px) { .qr { display: none; } }
+  h1 { font-size: 20px; margin: 0 0 16px; letter-spacing: -0.02em; font-weight: 600; }
+  .card {
+    background: #141414;
+    border: 1px solid #262626;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .q { font-size: 13px; margin-bottom: 10px; color: #d4d4d4; }
+  .row { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #2a2a2a;
+    background: #1c1c1c;
+    color: #e5e5e5;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 200ms ease-in-out, border-color 200ms ease-in-out, opacity 200ms ease-in-out;
+  }
+  button:hover:not(:disabled) { background: #242424; border-color: #3a3a3a; }
+  button:disabled { cursor: not-allowed; }
+  button .count { font-variant-numeric: tabular-nums; color: #888; font-size: 12px; }
+  button.chosen-yes { background: #15803d; border-color: #16a34a; color: #fff; }
+  button.chosen-yes .count { color: rgba(255,255,255,0.85); }
+  button.chosen-no { background: #b91c1c; border-color: #dc2626; color: #fff; }
+  button.chosen-no .count { color: rgba(255,255,255,0.85); }
+  button.dimmed { opacity: 0.3; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="qr"><img id="qr" alt="qr" width="120" height="120"></div>
+  <h1>live class poll</h1>
+
+  <div class="card" data-q="github">
+    <div class="q">1. do you have a github account?</div>
+    <div class="row">
+      <button data-choice="yes"><span>yes</span><span class="count">0</span></button>
+      <button data-choice="no"><span>no</span><span class="count">0</span></button>
+    </div>
+  </div>
+
+  <div class="card" data-q="claudecode">
+    <div class="q">2. do you have claude code installed?</div>
+    <div class="row">
+      <button data-choice="yes"><span>yes</span><span class="count">0</span></button>
+      <button data-choice="no"><span>no</span><span class="count">0</span></button>
+    </div>
+  </div>
+
+  <div class="card" data-q="vercel">
+    <div class="q">3. do you have a vercel account?</div>
+    <div class="row">
+      <button data-choice="yes"><span>yes</span><span class="count">0</span></button>
+      <button data-choice="no"><span>no</span><span class="count">0</span></button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const prodUrl = location.origin;
+  document.getElementById('qr').src =
+    'https://api.qrserver.com/v1/create-qr-code/?size=120x120&margin=0&data=' + encodeURIComponent(prodUrl);
+
+  function render(state) {
+    document.querySelectorAll('.card').forEach(card => {
+      const q = card.dataset.q;
+      const voted = localStorage.getItem('vote-' + q);
+      card.querySelectorAll('button').forEach(btn => {
+        const choice = btn.dataset.choice;
+        btn.querySelector('.count').textContent = (state && state[q]) ? state[q][choice] : 0;
+        btn.classList.remove('chosen-yes', 'chosen-no', 'dimmed');
+        if (voted) {
+          btn.disabled = true;
+          if (voted === choice) {
+            btn.classList.add(choice === 'yes' ? 'chosen-yes' : 'chosen-no');
+          } else {
+            btn.classList.add('dimmed');
+          }
+        } else {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function fetchState() {
+    const r = await fetch('/api/vote', { cache: 'no-store' });
+    return r.json();
+  }
+
+  async function vote(q, choice) {
+    if (localStorage.getItem('vote-' + q)) return;
+    localStorage.setItem('vote-' + q, choice);
+    render({ github:{yes:0,no:0}, claudecode:{yes:0,no:0}, vercel:{yes:0,no:0} });
+    const r = await fetch('/api/vote?q=' + q + '&choice=' + choice, { method: 'POST' });
+    render(await r.json());
+  }
+
+  document.querySelectorAll('.card').forEach(card => {
+    card.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => vote(card.dataset.q, btn.dataset.choice));
+    });
+  });
+
+  async function poll() {
+    try { render(await fetchState()); } catch (e) {}
+  }
+  poll();
+  setInterval(poll, 1500);
+</script>
+</body>
+</html>
